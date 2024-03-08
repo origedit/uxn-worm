@@ -13,3 +13,4 @@ you can assemble the game yourself with [Drifblim](https://wiki.xxiivv.com/site/
 ```bash
 uxnemu drifblim.rom worm.tal worm.rom
 ```
+you can edit the .tal file and change the size of the playfield in the labels field-w and field-h.
