@@ -1,0 +1,316 @@
+( worm game )
+
+|00 @System &catch $2 &expansion $2 &pad $2 &metadata $2 &r $2 &g $2 &b $2 &debug $1 &state $1
+|10 @Console &vector $2 &read $1 &pad $4 &type $1 &write $1 &error $1
+|20 @Screen &vector $2 &width $2 &height $2 &auto $1 &pad $1 &x $2 &y $2 &addr $2 &pixel $1 &sprite $1
+|80 @Controller &vector $2 &button $1 &key $1
+|90 @Mouse &vector $2 &x $2 &y $2 &state $1 &chord $1 &pad $4 &scrolly &scrolly-hb $1 &scrolly-lb $1
+|c0 @DateTime &year $2 &month $1 &day $1 &hour $1 &minute $1 &second $1 &dotw $1 &doty $2 &isdst $1
+|0018 @field-w
+|0018 @field-h
+|0010 @step-t-1
+|0004 @step-t-2
+|0030 @scale
+|000
+
+	@head &x $1 &y $1 &dir $1 &step $1 &step-t $1
+	@tail &x $1 &y $1 &grow $1
+	@length $2
+	@color $1
+	@food &x $1 &y $1
+	@score $2
+
+|100
+
+@on-start ( -> )
+	#e30d .System/r DEO2
+	#f09a .System/g DEO2
+	#d165 .System/b DEO2
+	;field-w .scale SFT2 .Screen/width DEO2
+	;field-h .scale SFT2 .Screen/height DEO2
+	<prng-init>
+	<init>
+	BRK
+
+@on-frame ( -> )
+	.head/step LDZ ?{
+		.head/step-t LDZ .head/step STZ
+		<step>
+		<draw>
+		BRK }
+	.head/step LDZk #01 SUB SWP STZ
+	BRK
+
+@on-controller ( -> )
+	( | quit on ^q )
+	[ LIT2 01 -Controller/button ] DEI NEQ ?{
+		[ LIT2 "q -Controller/key ] DEI NEQ ?{
+			[ LIT2 80 -System/state ] DEO }
+		}
+	.Controller/button DEI DUP ?{ POP BRK }
+	DUP #10 AND ?&up
+	DUP #20 AND ?&down
+	DUP #40 AND ?&left
+	DUP #80 AND ?&right
+	BRK
+	&up ( -> )
+		[ LIT2 00 -head/dir ] STZ
+		BRK
+	&right ( -> )
+		[ LIT2 01 -head/dir ] STZ
+		BRK
+	&down ( -> )
+		[ LIT2 02 -head/dir ] STZ
+		BRK
+	&left ( -> )
+		[ LIT2 03 -head/dir ] STZ
+		BRK
+
+@on-mouse ( -> )
+	([ LIT2 &x $2 ] .Mouse/x DEI2 DUP2 ,&x STR2
+	SUB2 [ LIT2 &y $2 ] .Mouse/y DEI2 DUP2 ,&y STR2
+	OVR2 #7fff AND2 OVR2 #7fff AND2 OVR2 OVR2 GTH2k [ JMP SWP ] POP #0010 GTH2 [ JMP ] BRK #010f DEO
+	) BRK 
+
+(
+@|game )
+
+@<init> ( -- )
+	[ LIT2 03 -head/x ] STZ
+	[ LIT2 03 -head/y ] STZ
+	[ LIT2 01 -head/dir ] STZ
+	[ LIT2 -step-t-1 -head/step-t ] STZ
+	[ LIT2 00 -head/step ] STZ
+	.head LDZ2 .tail STZ2
+	[ LIT2 02 -tail/grow ] STZ
+	[ LIT2 81 -color ] STZ
+	#0000 .length STZ2
+	<new-food>
+	#0000 .score STZ2
+	<step>
+	;on-frame .Screen/vector DEO2
+	;on-controller .Controller/vector DEO2
+	;on-mouse .Mouse/vector DEO2
+	JMP2r
+
+@<step> ( -- )
+	.head/dir LDZ DUP .head LDZ2 xy-pos ;dirs ADD2 STA
+	DUP dir-x .head/x LDZ ADD .field-w mod .head/x STZ
+	dir-y .head/y LDZ ADD .field-h mod .head/y STZ
+	( | tail )
+	[ LIT2 00 -tail/grow ] LDZ ?{
+		POP #ff .tail LDZ2 xy-pos ;dirs ADD2 LDA DUP dir-x .tail/x LDZ ADD .field-w mod .tail/x STZ
+		dir-y .tail/y LDZ ADD .field-h mod .tail/y STZ }
+	?{
+		.tail/grow LDZ #01 SUB .tail/grow STZ
+		.length LDZ2k INC2 ROT STZ2 }
+	( die ) eating-itself ?<die>
+	( | eat )
+	( exit point ) .head LDZ2 .food LDZ2 EQU2 [ JMP ] JMP2r
+	.tail/grow LDZk INC INC SWP STZ
+	.score LDZ2k INC2 ROT STZ2
+	( speed up ) [ LIT2 07 -score ] LDZ2 NIP AND ?{
+		.head/step-t LDZ DUP .step-t-2 EQU ?{
+			DUP #01 SUB .head/step-t STZ }
+		POP }
+	( change color ) [ LIT2 1f -score ] LDZ2 NIP AND ?{
+		.color LDZk INC #83 AND SWP STZ }
+	( >> )
+
+@<new-food> ( -- )
+	#0000
+	&l ( -- )
+		POP2 prng NIP .field-w mod prng NIP .field-h mod DUP2 touches-snake ?&l
+	.food/y STZ
+	.food/x STZ
+	prng #0003 AND2 #40 SFT2 ;food-chr ADD2 ;<draw-food>/addr STA2
+	JMP2r
+
+@<die> ( -> )
+	;&on-screen .Screen/vector DEO2
+	( count to 20 ) #2000 BRK
+	&on-screen ( -> )
+		INC GTHk ?{
+			#0000 .Screen/vector DEO2
+			;&on-controller .Controller/vector DEO2
+			;&on-mouse .Mouse/vector DEO2 }
+		BRK
+	&on-controller ( -> )
+	&on-mouse ( -> )
+		<init>
+		BRK
+
+@eating-itself ( -- flag )
+	.head LDZ2 .tail LDZ2 [ LIT2r 0000 ]
+	&l ( -- )
+		EQU2k ?{ next-pos INC2r !&l }
+	POP2 POP2 .length LDZ2 STH2r EQU2 ?{ #ff JMP2r }
+	#00 JMP2r
+
+@touches-snake ( x y -- flag )
+	.tail LDZ2
+	&l ( ? )
+		DUP2 .head LDZ2 EQU2 ?{
+			NEQ2k ?{ POP2 POP2 #ff JMP2r }
+			next-pos !&l }
+	NEQ2 ?{ #ff JMP2r }
+	#00 JMP2r
+
+@xy-pos ( x y -- pos* )
+	#00 SWP ;field-w MUL2 STH2
+	#00 SWP STH2r ADD2 JMP2r
+
+@dir-x ( dir -- dir-x )
+	#00 SWP ;&data ADD2 LDA JMP2r
+	&data [ 00 01 00 ff ]
+
+@dir-y ( dir -- dir-y )
+	#00 SWP ;&data ADD2 LDA JMP2r
+	&data [ ff 00 01 00 ]
+
+@next-pos ( x y -- x y )
+	DUP2 xy-pos ;dirs ADD2 LDA DUP dir-y ROT ADD .field-h mod STH
+	dir-x ADD .field-w mod STHr JMP2r
+
+(
+@|draw )
+
+@<draw> ( -- )
+	<clear-screen>
+	<draw-food>
+	<draw-snake>
+	<draw-score>
+	JMP2r
+
+@<clear-screen> ( -- )
+	#0000 DUP2 .Screen/x DEO2
+	.Screen/y DEO2
+	[ LIT2 80 -Screen/pixel ] DEO
+	[ LIT2 c0 -Screen/pixel ] DEO
+	JMP2r
+
+@<draw-snake> ( -- )
+	.color LDZ ,&color STR
+	[ LIT2 00 -Screen/auto ] DEO
+	( | tail )
+	[ LIT2 00 -tail/x ] LDZ .scale SFT2 .Screen/x DEO2
+	[ LIT2 00 -tail/y ] LDZ .scale SFT2 .Screen/y DEO2
+	;tail-chr .tail LDZ2 xy-pos ;dirs ADD2 LDA <draw-snake>/end
+	( | body )
+	;body-chr .Screen/addr DEO2
+	.tail LDZ2 DUP2 xy-pos ;dirs ADD2 LDA STH
+	&l ( -- )
+		next-pos DUP2 #00 SWP .scale SFT2 .Screen/y DEO2
+		#00 SWP .scale SFT2 .Screen/x DEO2
+		DUP2 xy-pos ;dirs ADD2 LDA DUP #20 SFT STHr ORA #00 SWP ;body-dirs ADD2 LDA #00 SWP ;body-chr ADD2 .Screen/addr DEO2
+		STH
+		[ LIT2 &color $1 -Screen/sprite ] DEO
+		DUP2 .head LDZ2 NEQ2 ?&l
+	POPr POP2 ;head-chr .head/dir LDZ <draw-snake>/end
+	JMP2r
+	&end ( addr* dir -- )
+		STHk dir-y DUP #00 EQU ?{
+			DUP #01 NEQ ?{ #0020 }
+			DUP #ff NEQ ?{ #0010 }
+			ROT STH
+			ADD2 STHr }
+		POP .Screen/addr DEO2
+		.color LDZ STHr dir-x #ff NEQ ?{ #10 ORA }
+		.Screen/sprite DEO
+		JMP2r
+
+@<draw-food> ( -- )
+	[ LIT2 00 -food/x ] LDZ .scale SFT2 .Screen/x DEO2
+	[ LIT2 00 -food/y ] LDZ .scale SFT2 .Screen/y DEO2
+	[ LIT2 &addr $2 ] .Screen/addr DEO2
+	[ LIT2 00 -Screen/auto ] DEO
+	[ LIT2 81 -Screen/sprite ] DEO
+	JMP2r
+
+@<draw-score> ( -- )
+	#ff .score LDZ2
+	&digit ( -- ... )
+		DUP2 #000a DIV2k MUL2 SUB2 NIP ROT ROT #000a DIV2 ORAk ?&digit
+	POP2 #0008 DUP2 .Screen/x DEO2
+	.Screen/y DEO2
+	( 0001 x101 ) [ LIT2 15 -Screen/auto ] DEO
+	&l ( ... -- )
+		#00 SWP #40 SFT2 ;digits-icn ADD2 .Screen/addr DEO2
+		[ LIT2 41 -Screen/sprite ] DEO
+		DUP #ff NEQ ?&l
+	POP JMP2r
+
+(
+@| utilities )
+
+@mod ( a b -- a%b )
+	DIVk MUL SUB JMP2r
+
+@<prng-init> ( -- )
+	[ LIT2 00 -DateTime/second ] DEI [ LIT2 00 -DateTime/minute ] DEI #60 SFT2 EOR2 [ LIT2 00 -DateTime/hour ] DEI #c0 SFT2 EOR2 ,prng/x STR2
+	[ LIT2 00 -DateTime/hour ] DEI #04 SFT2 [ LIT2 00 -DateTime/day ] DEI #10 SFT2 EOR2 [ LIT2 00 -DateTime/month ] DEI #60 SFT2 EOR2 .DateTime/year DEI2 #a0 SFT2 EOR2 ,prng/y STR2
+	JMP2r
+
+@prng ( -- number* )
+	[ LIT2 &x $2 ] DUP2 #50 SFT2 EOR2 DUP2 #03 SFT2 EOR2 [ LIT2 &y $2 ] DUP2 ,&x STR2
+	DUP2 #01 SFT2 EOR2 EOR2 ,&y STR2k POP JMP2r
+
+(
+@|assets )
+
+@head-chr ( * )
+	( right ) [
+	7cfe ffe3 e7e7 fe7c 007c fefe fafa 7c00 ]
+	( up ) [
+	3c7e bd99 ffff ff7e 003c 5a7e 7e7e 7e3c ]
+	( down ) [
+	7eff ff99 bdbd 7e3c 3c7e 7e7e 5a5a 3c00 ]
+
+@body-chr ( * )
+	( ver ) [
+	fefe fefe 7f7f 7f7f 7c7c 7c7c 3e3e 3e3e ]
+	( hor ) [
+	f0ff ffff ffff ff0f 00f0 ffff ffff 0f00 ]
+	( dr ) [
+	1f3f 7fff ffff fffe 001f 3f7f 7f7f 7e7c ]
+	( dl ) [
+	f8fc feff ffff ff7f 00f8 fcfe fefe 7e3e ]
+	( ul ) [
+	7fff ffff fffe fcf8 3e7e fefe fefc f800 ]
+	(ur ) [
+	feff ffff ff7f 3f0f 7c7e 7f7f 7f3f 0f00 ]
+
+@tail-chr ( * )
+	( right ) [
+	3f7f ffff ffff 7f3f 003f 7f7f 7f7f 3f00 ]
+	( up ) [
+	ffff ffff ffff 7e3c 7e7e 7e7e 7e7e 3c00 ]
+	( down ) [
+	3c7e ffff ffff ffff 003c 7e7e 7e7e 7e7e ]
+
+@food-chr [
+	3c7e ffff ffaf 563c 3c7a ffff ffff 7e3c
+	0302 0307 0f1f fe7c 0002 0307 0f1f 7e7c
+	0000 0060 f6ef 6f06 0f12 2404 2012 0000
+	0002 ddff ffff ff7e 1a7e ffff ffff ff7e ]
+
+@digits-icn [
+	003e 7fe3 c3c3 c3c3 c3c3 c3c3 c7fe 7c00
+	0018 1838 7878 1818 1818 1818 183c 7e00
+	007e ffc3 c303 0306 1c30 60c0 c1ff ff00
+	007e ffc3 0303 033e 3f03 0303 c3ff 7e00
+	0018 1838 3878 58d8 ffff 1818 183c 7e00
+	00fe fec0 c0c0 feff 0303 0303 c3ff 7e00
+	001c 3c60 c0c0 c0fe ffc3 c3c3 c3ff 7e00
+	00ff ff03 060c 0818 7e7e 1818 1818 1800
+	003e 7f63 6367 7e3e 73e3 c3c3 c3ff 7e00
+	007e ffc3 c3c3 c3c3 ff7f 0303 03ff fe00 ]
+
+(
+@| data )
+
+@body-dirs [
+	00 40 00 50 20 10 50 00 00 30 00 20 30 00 40 10 ]
+
+@dirs
+
