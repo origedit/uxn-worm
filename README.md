@@ -1,5 +1,3 @@
-# uxn-worm
-
 ![preview image](preview.png)
 
 control using arrow keys. close the game with ctrl-q.
