@@ -9,7 +9,7 @@ you need [Uxn](https://100r.co/site/uxn.html) to run this.
 uxnemu worm.rom
 ```
 ---
-you can assemble the game yourself with [drifblim](https://wiki.xxiivv.com/site/drifblim.html)
+you can assemble the game yourself with [Drifblim](https://wiki.xxiivv.com/site/drifblim.html)
 ```bash
 uxnemu drifblim.rom worm.tal worm.rom
 ```
