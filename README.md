@@ -1,5 +1,7 @@
 # uxn-worm
 
+![preview image](preview.png)
+
 control using arrow keys. close the game with ctrl-q.
 
 you need [Uxn](https://100r.co/site/uxn.html) to run this.
